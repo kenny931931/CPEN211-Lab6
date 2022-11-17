@@ -47,9 +47,9 @@ module datapath(input clk, input [15:0] mdata, input [7:0] pc, input [1:0] wb_se
 	// mux C
 	case (wb_sel)
 	  2'b00 : w_data = out;
-	  2'b01 : {8'b0, pc};
-	  2'b10 : sximm8;
-	  2'b11 : mdata;
+	  2'b01 : w_data = {8'b0, pc};
+	  2'b10 : w_data = sximm8;
+	  2'b11 : w_data = mdata;
 	endcase
   end
 endmodule: datapath
