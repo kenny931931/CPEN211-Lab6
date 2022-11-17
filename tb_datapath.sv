@@ -1,33 +1,23 @@
 module tb_datapath(output err);
   // your implementation here
 
-  reg clk;
-  reg [15:0] datapath_in;
-  reg wb_sel;
-  reg [2:0] w_addr;
-  reg w_en;
-  reg [2:0] r_addr;
-  reg en_A;
-  reg en_B;
-  reg [1:0] shift_op;
-  reg sel_A;
-  reg sel_B;
-  reg [1:0] ALU_op;
-  reg en_C;
-  reg en_status;
+  reg clk, w_en, en_A, en_B, sel_A, sel_B, en_C, en_status, Z_out, N_out, V_out;
+  reg [15:0] mdata, sximm8, sximm5, datapath_out;
+  reg [7:0] pc;
+  reg [2:0] w_addr, r_addr;
+  reg [1:0] wb_sel, shift_op, ALU_op;
 
-  reg [15:0] datapath_out;
-  reg Z_out;
 
   reg outErr;
 
   integer num_passes = 0;
   integer num_fails = 0;
 
-  datapath DUT(.clk(clk), .datapath_in(datapath_in), .wb_sel(wb_sel), .w_addr(w_addr), .w_en(w_en), .r_addr(r_addr), .en_A(en_A),
+  datapath DUT(.clk(clk), .mdata(mdata), .pc(pc), .wb_sel(wb_sel), .w_addr(w_addr), .w_en(w_en), .r_addr(r_addr), .en_A(en_A),
                 .en_B(en_B), .shift_op(shift_op), .sel_A(sel_A), .sel_B(sel_B),
                 .ALU_op(ALU_op), .en_C(en_C), .en_status(en_status),
-                .datapath_out(datapath_out), .Z_out(Z_out));
+				.sximm8(sximm8), .sximm5(sximm5),
+                .datapath_out(datapath_out), .Z_out(Z_out), .N_out(N_out), .V_out(V_out));
 
   `define regOne 3'b000
   `define regTwo 3'b001
@@ -40,439 +30,148 @@ module tb_datapath(output err);
   
   //================================================================================TASKS===========================================
   
-   task writeTo(input [2:0] address, input [15:0] valToAdd);
-   #5;
-   w_en = 1'b1;
-   w_addr = address; 
-   wb_sel = 1'b1;
-   datapath_in = valToAdd;
-   #10;
-
-   endtask
-
-   task set(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input signed [15:0] expectedVal, input [1:0] ALUcontrol);
-   //load value in register oneR into flip-flop A 
-   #5;
-   r_addr = oneR;
-   en_A = 1'b1;
-   en_B = 1'b0;
-   w_en = 1'b0;
-
-   #10;
-
-   //load value in register twoR into flip-flop B
-   r_addr = twoR;
-   en_A = 1'b0;
-   en_B = 1'b1;
-   w_en = 1'b0;
-   #10;
-
-   //perform computation
-   #5;
-   en_A = 1'b0; //might need to space out 
-   en_B = 1'b0;
-   ALU_op = ALUcontrol;
-   sel_A = 1'b0;
-   sel_B = 1'b0;
-   shift_op = 2'b00;
-   en_C = 1'b1;
-   en_status = 1'b1;
-   w_en = 1'b0;
-
+  task writeTo(input [2:0] address, input [15:0] valToAdd);
+    w_en = 1'b1;
+    w_addr = address; 
+    wb_sel = 2'b10;
+    sximm8 = valToAdd;
     #10;
-    assert (datapath_out === expectedVal)begin 
-        $display("[PASS]: val is %-d", expectedVal);
-        num_passes = num_passes+1;
-        
-   end else begin
-        $error("[FAIL]: amount is %-d (expected %-d)", datapath_out, expectedVal);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
+  endtask
 
-  
+  task test(input [2:0] destination,  input [2:0] valA,  input [2:0] valB, input signed [15:0] exp_val, input [2:0] exp_f, input [1:0] ALU_ctrl, input [1:0] sh_ctrl);
+    //load value in register oneR into flip-flop A 
+    r_addr = valA;
+    en_A = 1'b1;
+    en_B = 1'b0;
+    w_en = 1'b0;
+    #10;
 
-   //write back result and store in RF
+    //load value in register twoR into flip-flop B
+    r_addr = valB;
+    en_A = 1'b0;
+    en_B = 1'b1;
+    w_en = 1'b0;
+    #10;
 
-#5;
-
-en_status = 1'b0;
-w_en = 1'b1;
-wb_sel = 1'b0;
-w_addr = destination;
-#10;
-
-   endtask
-   task setNotSpecified(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input signed [15:0]  expectedVal, input [1:0] ALUcontrol);
-   //load value in register oneR into flip-flop A 
-   #5;
-   r_addr = oneR;
-   en_A = 1'b1;
-   en_B = 1'b0;
-   w_en = 1'b0;
-
-   #10;
-
-   //load value in register twoR into flip-flop B
-   r_addr = twoR;
-   en_A = 1'b0;
-   en_B = 1'b1;
-   w_en = 1'b0;
-   #10;
-
-   //perform computation
-   #5;
-   en_A = 1'b0; //might need to space out 
-   en_B = 1'b0;
-   ALU_op = ALUcontrol;
-   sel_A = 1'b0;
-   sel_B = 1'b0;
+    //perform computation
+    en_A = 1'b0; //might need to space out 
+    en_B = 1'b0;
+    ALU_op = ALU_ctrl;
+    shift_op = sh_ctrl;
+    en_C = 1'b1;
+    en_status = 1'b1;
+    w_en = 1'b0;
+    #10;
    
-   en_C = 1'b1;
-   en_status = 1'b1;
-   w_en = 1'b0;
-
-    #10;
-    assert (datapath_out === expectedVal)begin 
-        $display("[PASS]: val is %-d", expectedVal);
-        num_passes = num_passes+1;
+    assert (datapath_out == exp_val && {Z_out, N_out, V_out} == exp_f)begin 
+      $display("[PASS]: val is %-d and flag[ZNV] is %-b", exp_val, exp_f);
+      num_passes = num_passes+1;
         
-   end else begin
-        $error("[FAIL]: amount is %-d (expected %-d)", datapath_out, expectedVal);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-
-  
-
-   //write back result and store in RF
-
-#5;
-
-en_status = 1'b0;
-w_en = 1'b1;
-wb_sel = 1'b0;
-w_addr = destination;
-#10;
-
-   endtask
+      end else begin
+      $error("[FAIL]: val is %-d (expected %-d) and flag[ZNV] is %-b (expected %-b", datapath_out, exp_val, {Z_out, N_out, V_out}, exp_f);
+      outErr = 1'b1;
+      num_fails = num_fails+1;
+    end
+	#10;
+	
+    //write back result and store in RF
+    en_status = 1'b0;
+    w_en = 1'b1;
+    wb_sel = 2'b00;
+    w_addr = destination;
+    #10;
+  endtask
 
   initial begin
     clk = 1'b1;
     forever #5 clk = ~clk;
   end
-//=====================================================================TESTS=====================================================
+
 //=====================================================================TESTS=====================================================
   initial begin
-     $display("\n=== RESET ===");
-  #1;
-    {clk, datapath_in, wb_sel, w_addr, w_en, r_addr, en_A, //might not be supposed to reset everything
-                en_B, shift_op, sel_A, sel_B,
-                ALU_op, en_C, en_status,
-                datapath_out, Z_out} = 51'b000000000000000000000000000000000000000000000000000;
+    $display("\n=== RESET ===");
+    #1;
+    clk = 0;
+	w_en = 0;
+	en_A = 0;
+	en_B = 0;
+	en_C = 0;
+	en_status = 0;
+	wb_sel = 2'b0;
+    sel_A = 0;
+	sel_B = 0;
+	
+    outErr = 1'b0;
+	
+	$display("\n=== TEST SET 1 ===");
+	$display("\n(normal operation of ALU and shifter)");
+	begin
+	  //Reset
+      writeTo(3'b000,16'd0);
+      writeTo(3'b001,16'd1);
+      writeTo(3'b010,16'd2);
+      writeTo(3'b011,16'd3);
+      writeTo(3'b100,16'd4);
+      writeTo(3'b101,16'd5);
+      writeTo(3'b110,16'd6);
+      writeTo(3'b111,16'd7);
+	  
+      sel_A = 1'b0;
+      sel_B = 1'b0;
+	  
+	  //ADD: 1+2=3 into reg1 (normal addition)
+	  test(`regOne, `regTwo, `regThree, 16'd3, 3'b000, 2'b00, 2'b00);
+		   
+	  //ADD: 3+2=5 into reg1 (memory write)
+	  test(`regOne, `regOne, `regThree, 16'd5, 3'b000, 2'b00, 2'b00);
 
-   
-     outErr = 1'b0;
+	  //SUB: 4-5=-1 into reg4 (normal substraction)
+	  test(`regFour, `regFive, `regSix, -16'd1, 3'b010, 2'b01, 2'b00);
+		
+	  //SUB: 4-(-1)=5 into reg4 (memory write)
+	  test(`regFour, `regFive, `regFour, 16'd5, 3'b000, 2'b01, 2'b00);
+	  
+	  //AND: 1 AND 4=0 into reg1 (bitwise AND with LSL, zero)
+	  test(`regOne, `regTwo, `regThree, 16'd0, 3'b100, 2'b10, 2'b01);
+	  
+	  //NOT: NOT 8 into reg1 (bitwise negation with LSR)
+	  writeTo(3'b000, 16'd16);
+	  test(`regOne, `regTwo, `regOne, -16'd9, 3'b010, 2'b11, 2'b10);
+	  
+	  //NOT: NOT -9 into reg1 (bitwise negation with arithmetic right shift)
+	  test(`regOne, `regTwo, `regOne, 16'd4, 3'b000, 2'b11, 2'b11);
+	  
+	  //ADD: 32767+1=-32768 into reg1 (overflow)
+	  writeTo(3'b111, 16'd32767);
+	  test(`regOne, `regTwo, `regEight, -16'd32768, 3'b011, 2'b00, 2'b00);
+	  
+	  //SUB: -32768-1=32767 into reg1 (underflow)
+	  test(`regOne, `regOne, `regTwo, 16'd32767, 3'b001, 2'b01, 2'b00);
 
-
-    //write to all registers
-
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-
-    //ADD 1,2,3
-    set(`regOne,`regTwo,`regThree, 16'd3, 2'b00);
-       
-
-    //ADD 1,2,3
-    set(`regOne,`regOne,`regThree, 16'd5,2'b00);
-   
-
-    //SUB 4,5,6
-    set(`regFour,`regFive,`regSix, -16'd1, 2'b01);
+	end
+	
+	$display("\n=== TEST SET 2 ===");
+	$display("\n(sel_A and sel_B = 1)");
+	begin
+	  writeTo(3'b000,16'd0);
+      writeTo(3'b001,16'd1);
+      writeTo(3'b010,16'd2);
+      writeTo(3'b011,16'd3);
+      writeTo(3'b100,16'd4);
+      writeTo(3'b101,16'd5);
+      writeTo(3'b110,16'd6);
+      writeTo(3'b111,16'd7);
+	  
+      sel_A = 1'b1;
+      sel_B = 1'b1;
+	  
+	  sximm5 = 16'd98;
+	  test(`regOne, `regTwo, `regThree, 16'd98, 3'b000, 2'b00, 2'b00);
+	  test(`regOne, `regTwo, `regThree, -16'd98, 3'b010, 2'b01, 2'b01);
+	  test(`regOne, `regTwo, `regThree, 16'd0, 3'b100, 2'b10, 2'b10);
+	  test(`regOne, `regTwo, `regThree, -16'd99, 3'b010, 2'b11, 2'b11);
+	end
     
-    set(`regFour, `regFive, `regFour, 16'd5, 2'b01 ); //= 4-(-1)
-
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-    
-
-    set(`regEight, `regSeven, `regSix, 16'b0000000000000100, 2'b10);
-
-    
-
-
-    set(`regSeven, `regEight, `regFour, 16'b0000000000000000, 2'b10);
-
-
-    set(`regOne, `regFive, `regSix, 16'b1111111111111010, 2'b11);
-
-
-    set(`regThree, `regFive, `regOne, 16'b0000000000000101, 2'b11);
-
-
-    writeTo(3'b000,16'b0000000000000000);
-
-
-    set(`regOne,`regFive, `regOne, 16'b1111111111111111,2'b11);
-
-
-
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-    #3;
-
-//Sel A and b are 1 ================================================================================
-datapath_in = 16'd0;
-sel_A=1'b1;
-sel_B=1'b1;
-
-en_C=1;
-ALU_op = 2'b00;
-en_status = 1'b1;
-#5;
- assert (datapath_out === 16'd0)begin 
-        $display("[PASS]: val is decimal 0");
-        num_passes = num_passes+1;
-        
-   end else begin
-        $error("[FAIL]: amount is %-d (expected decimal 0)", datapath_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-  assert (Z_out === 1'b1)begin
-    $display("[PASS]: Z_out is true");
-    num_passes = num_passes+1;
-    end else begin
-        $error("[FAIL]: Z_out is %-d (expected 1)", Z_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-   #5;
-   
-
-datapath_in = 16'd10;
-sel_A=1'b1;
-sel_B=1'b1;
-#5;
-en_C=1;
-ALU_op = 2'b01;
-#5;
- assert (datapath_out === 16'd10)begin 
-        $display("[PASS]: val is decimal 10");
-        num_passes = num_passes+1;
-        
-   end else begin
-        $error("[FAIL]: amount is %-d (expected decimal 10)", datapath_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-
-//============================================================================================================with addition
-
-#5;
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-
-    //left shift
-    shift_op = 2'b01;
-
-//(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input [15:0] expectedVal, input [1:0] ALUcontrol);
-setNotSpecified(`regTwo, `regOne, `regSix, 16'd10, 2'b00);
-setNotSpecified(`regOne, `regEight, `regOne, 16'd7, 2'b00);
-writeTo(3'b000,16'b0000000000000000);
-writeTo(3'b001,16'b0000000000000001);
-
-//right shift
-shift_op = 2'b10;
-setNotSpecified(`regTwo, `regThree, `regOne, 16'd2, 2'b00);
-setNotSpecified(`regTwo, `regSix, `regEight, 16'd8, 2'b00 );
-
- writeTo(3'b001,16'b0000000000000001);
- writeTo(3'b111,16'b1000000000000111);
-
-//arithmetic right shift
-shift_op = 2'b11;
-setNotSpecified(`regTwo, `regTwo, `regEight,16'b1100000000000100, 2'b00);
-writeTo(3'b111,16'b0000000000000111);
-setNotSpecified(`regTwo,`regOne, `regEight, 16'd3, 2'b00);
-
-//-========================================================================================================with subtraction
-#5;
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-
-    //left shift
-    shift_op = 2'b01;
-
-//(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input [15:0] expectedVal, input [1:0] ALUcontrol);
-setNotSpecified(`regTwo, `regOne, `regSix, -16'd10, 2'b01);
-setNotSpecified(`regOne, `regEight, `regOne, 16'd7, 2'b01);
-writeTo(3'b000,16'b0000000000000000);
-writeTo(3'b001,16'b0000000000000001);
-
-//right shift
-shift_op = 2'b10;
-setNotSpecified(`regTwo, `regThree, `regOne, 16'd2, 2'b01);
-setNotSpecified(`regTwo, `regSix, `regEight, 16'd2, 2'b01 );
-
- writeTo(3'b001,16'b0000000000000001);
- writeTo(3'b111,16'b1000000000000111);
-
-//arithmetic right shift
-shift_op = 2'b11;
-setNotSpecified(`regTwo, `regTwo, `regEight,16'd16382, 2'b01);
-writeTo(3'b111,16'b0000000000000111);
-setNotSpecified(`regTwo,`regOne, `regEight, -16'd3, 2'b01);
-
-//============================================================================================================with AND
-
-#5;
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-
-    //left shift
-    shift_op = 2'b01;
-
-//(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input [15:0] expectedVal, input [1:0] ALUcontrol);
-setNotSpecified(`regTwo, `regOne, `regSix, 16'd0, 2'b10);
-en_status = 1'b1;
-#5;
-  assert (Z_out === 1'b1)begin
-    $display("[PASS]: Z_out is true");
-    num_passes = num_passes+1;
-    end else begin
-        $error("[FAIL]: Z_out is %-d (expected 1)", Z_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-   #5;
-setNotSpecified(`regOne, `regEight, `regOne, 16'd0, 2'b10);
-en_status = 1'b1;
-#5;
-  assert (Z_out === 1'b1)begin
-    $display("[PASS]: Z_out is true");
-    num_passes = num_passes+1;
-    end else begin
-        $error("[FAIL]: Z_out is %-d (expected 1)", Z_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-   #5;
-writeTo(3'b000,16'b0000000000000000);
-writeTo(3'b001,16'b0000000000000001);
-
-//right shift
-shift_op = 2'b10;
-setNotSpecified(`regTwo, `regThree, `regOne, 16'd0, 2'b10);
-en_status = 1'b1;
-#5;
-  assert (Z_out === 1'b1)begin
-    $display("[PASS]: Z_out is true");
-    num_passes = num_passes+1;
-    end else begin
-        $error("[FAIL]: Z_out is %-d (expected 1)", Z_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-   #5;
-setNotSpecified(`regTwo, `regSix, `regEight, 16'd1, 2'b10 );
-
- writeTo(3'b001,16'b0000000000000001);
- writeTo(3'b111,16'b1000000000000111);
-
-//arithmetic right shift
-shift_op = 2'b11;
-setNotSpecified(`regTwo, `regTwo, `regEight,16'd1, 2'b10);
-writeTo(3'b111,16'b0000000000000111);
-setNotSpecified(`regTwo,`regOne, `regEight, 16'd0, 2'b10);
-en_status = 1'b1;
-#5;
-  assert (Z_out === 1'b1)begin
-    $display("[PASS]: Z_out is true");
-    num_passes = num_passes+1;
-    end else begin
-        $error("[FAIL]: Z_out is %-d (expected 1)", Z_out);
-        outErr = 1'b1;
-        num_fails = num_fails+1;
-   end
-   #5;
-//-========================================================================================================with negation
-#5;
-    writeTo(3'b000,16'b0000000000000000);
-    writeTo(3'b001,16'b0000000000000001);
-    writeTo(3'b010,16'b0000000000000010);
-    writeTo(3'b011,16'b0000000000000011);
-    writeTo(3'b100,16'b0000000000000100);
-    writeTo(3'b101,16'b0000000000000101);
-    writeTo(3'b110,16'b0000000000000110);
-    writeTo(3'b111,16'b0000000000000111);
-
-    //left shift
-    shift_op = 2'b01;
-
-//(input [2:0] destination,  input [2:0] oneR,  input [2:0] twoR, input [15:0] expectedVal, input [1:0] ALUcontrol);
-setNotSpecified(`regTwo, `regOne, `regSix, -16'd11, 2'b11);
-setNotSpecified(`regOne, `regEight, `regOne, -16'd1, 2'b11);
-writeTo(3'b000,16'b0000000000000000);
-writeTo(3'b001,16'b0000000000000001);
-
-//right shift
-shift_op = 2'b10;
-setNotSpecified(`regTwo, `regThree, `regOne,  -16'd1, 2'b11);
-setNotSpecified(`regTwo, `regSix, `regEight,  -16'd4, 2'b11 );
-
- writeTo(3'b001,16'b0000000000000001);
- writeTo(3'b111,16'b1000000000000111);
-
-//arithmetic right shift
-shift_op = 2'b11;
-setNotSpecified(`regTwo, `regTwo, `regEight,16'd16380, 2'b11);
-writeTo(3'b111,16'b0000000000000111);
-setNotSpecified(`regTwo,`regOne, `regEight, -16'd4, 2'b11);
-
-
-
-
-
-
-  
 
 $display("\n\n==== TEST SUMMARY ====");
     $display("  TEST COUNT: %-5d", num_passes + num_fails);
@@ -489,4 +188,3 @@ $display("\n\n==== TEST SUMMARY ====");
 
   
 endmodule: tb_datapath
-
