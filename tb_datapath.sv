@@ -7,7 +7,6 @@ module tb_datapath(output err);
   reg [2:0] w_addr, r_addr;
   reg [1:0] wb_sel, shift_op, ALU_op;
 
-
   reg outErr;
 
   integer num_passes = 0;
@@ -68,7 +67,7 @@ module tb_datapath(output err);
       num_passes = num_passes+1;
         
       end else begin
-      $error("[FAIL]: val is %-d (expected %-d) and flag[ZNV] is %-b (expected %-b", datapath_out, exp_val, {Z_out, N_out, V_out}, exp_f);
+      $error("[FAIL]: val is %-d (expected %-d) and flag[ZNV] is %-b (expected %-b)", datapath_out, exp_val, {Z_out, N_out, V_out}, exp_f);
       outErr = 1'b1;
       num_fails = num_fails+1;
     end
