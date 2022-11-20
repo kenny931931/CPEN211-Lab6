@@ -1,113 +1,683 @@
-module controller(input clk, input rst_n, input start,
-                  input [2:0] opcode, input [1:0] ALU_op, input [1:0] shift_op,
-                  input Z, input N, input V,
-                  output reg waiting,
-                  output reg [1:0] reg_sel, output reg[1:0] wb_sel, output reg w_en,
-                  output reg en_A, output reg en_B, output reg en_C, output reg en_status,
-                  output reg sel_A, output reg sel_B);
+module tb_controller(output err);
+  
+reg clk;
+reg rst_n;
+reg start;
+reg [2:0] opcode;
+reg[1:0] ALU_op;
+reg[1:0] shift_op;
+reg waiting;
+reg [1:0] reg_sel;
+reg[1:0] wb_sel;
+reg w_en;
+reg en_A;
+reg en_B;
+reg en_C;
+reg en_status;
+reg sel_A;
+reg sel_B;
 
-//write to Rd
-`define enable 4'd0
-//Load B w/ Rm and set waiting =1
-`define loadB 4'd1
-//Load A with Rn
-`define loadA 4'd2
+reg outErr;
 
-//move immediate states
-`define movI_one 4'd3
+  integer num_passes = 0;
+  integer num_fails = 0;
 
+  integer iwaiting =0;
+  integer iregsel =0;
+  integer iwbsel =0;
+  integer iwen =0;
+  integer iena=0;
+  integer ienb=0;
+  integer ienc=0;
+  integer ienstatus=0;
+  integer isela=0;
+  integer iselb=0;
 
-//MOV states
-`define mov1 4'd5
-`define mov2 4'd6
+  controller DUT(.clk(clk), .rst_n(rst_n), .start(start), .opcode(opcode), .ALU_op(ALU_op), .shift_op(shift_op), .waiting(waiting),.reg_sel(reg_sel), .wb_sel(wb_sel),.w_en(w_en), .en_A(en_A), 
+                  .en_B(en_B), .en_C(en_C), .en_status(en_status), .sel_A(sel_A), .sel_B(sel_B), .Z(Z), .V(V),.N(N));
 
+                  //define
+                  //tasks
 
-//ALU states
-`define cal 4'd8
-
-
-//wait
-`define wait 4'd12
-
-reg [3:0] next;
-reg signal =0;
-reg [3:0] state;
-reg [4:0] instruction;
-assign state = next;
-
-
-always_ff @( posedge clk ) begin 
-  if(start==1)begin
-    signal<=1;
-    next <= `wait;
-    en_status <= 0;
-    instruction <= {opcode,ALU_op};
-  end 
-  if(signal ==1) begin 
-		if (~rst_n) begin
-			next <= `wait;
-      waiting <= 1'b1;
-		end else begin
-			casex (instruction)
-//move immediate
-				5'b11010 : begin
-
-          case (state)
-              `wait : {next,reg_sel,w_en,wb_sel,waiting} <= {`movI_one, 2'b10,1'b1,2'b10, 1'b0};
-              `movI_one : {next, waiting, signal} <= {`wait, 1'b1,1'b0};
-            
-          endcase
-        end
-
-//MOV (1 reg to another)
-            5'b11000 : begin
-              case (state)
-                `wait : {next, reg_sel, en_B,waiting} <= {`mov1,2'b00,1'b1,1'b0};
-                `mov1 : {next,sel_B,sel_A,en_C} <= {`mov2,1'b0,1'b1,1'b1};
-                `mov2 : {next, wb_sel,w_en,reg_sel,waiting, signal} <= {`wait,2'b00,1'b1,2'b01,1'b1,1'b0};
-              endcase
-
-            end
-//ADD/AND           
-            5'b101x0 : begin
-            case (state)
-            `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
-            `loadB : {next,reg_sel,en_A,en_B} <= {`loadA, 2'b10, 1'b1,1'b0};
-            `loadA : {next, sel_A,sel_B,en_C} <= {`cal, 1'b0,1'b0,1'b1};
-            `cal : {next, wb_sel,w_en,reg_sel,waiting,signal} <= {`wait, 2'b00, 1'b1,2'b01,1'b1,1'b0};
-          
-            endcase
-
-              
-            end
-//CMP
-            5'b10101 : begin
-              case (state)
-            `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
-            `loadB : {next,reg_sel,en_A,en_B} <= {`loadA, 2'b10, 1'b1,1'b0};
-            `loadA : {next, sel_A,sel_B, en_status, waiting} <= {`enable, 1'b0,1'b0,1'b1,1'b1}; //status should output on the next rising edge, waiting goes high early
-            `enable : {next, en_status, signal} <= {`wait, 1'b0, 1'b0};
+    initial begin
+    clk = 1'b1;
+    forever #5 clk = ~clk;
+  end
 
 
-              endcase
 
-            end
-//MVN           
-            5'b10100 : begin
-              case (state)
-              `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
-              `loadB : {next, sel_A,sel_B,en_C} <= {`cal, 1'b0,1'b0,1'b1};
-              `cal : {next, wb_sel,w_en,reg_sel, waiting, signal} <= {`wait, 2'b00, 1'b1,2'b01,1'b1,1'b0};
-              endcase
-            end
+  initial begin
+     $display("\n=== RESET ===");
+  #1;
+  outErr = 1'b0;
 
-            default : next <= `wait;
-            
-            
-			endcase
-    end 
-	end
-	end
+  rst_n = 1'b1;
+  start =1'b0;
+  opcode = 3'b000;
+  ALU_op = 2'b00;
+  shift_op = 2'b00;
+//================================================================================================GOOD BEHAVIOUR==================================================================
+//================================================================================================GOOD BEHAVIOUR==================================================================
+//move immediate =============================================
+  opcode = 3'b110; ALU_op = 2'b10; 
+  #9;
+  start = 1'b1;
+  #10;
+start = 1'b0;
+  #1;
+ 
+  assert (reg_sel === 2'b10)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+  
 
-endmodule: controller
+  assert (w_en  === 1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", w_en);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
 
+   assert (w_en  === 1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", w_en);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (wb_sel  === 2'b10)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", wb_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+   assert (waiting  === 0)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert (waiting  === 1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+//MOV =========================================================================================================
+opcode = 110;
+ALU_op = 00;
+#5;
+start =1'b1;
+#10;
+start = 1'b0;
+
+assert (waiting  === 1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+#10;
+
+assert (reg_sel  === 2'b00)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (waiting  === 0)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert (sel_B===0)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", sel_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+    assert (sel_A===1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", sel_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+    assert (en_C===1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_C);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10; //=================================================================write Rd
+
+    assert (wb_sel===2'b00)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", wb_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+    assert (w_en===1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", w_en);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+    assert (reg_sel===2'b01)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", sel_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+ 
+assert (waiting  === 1)begin               //might not be correct timing
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+//ADD ==================================================================================================
+
+   opcode = 3'b101; ALU_op = 2'b00;
+   #5;
+start =1'b1;
+#10;
+start = 1'b0;
+
+assert (waiting  === 1)begin              
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+  #10;
+
+  assert (reg_sel  === 2'b00)begin               
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 0)begin            
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (waiting  === 0)begin           
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert (reg_sel  === 2'b10)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 0)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert ({sel_A,sel_B}  === {0,0})begin          
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: values are %-d %d (expected 1)", sel_A, sel_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_C  === 1)begin            
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_C);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_status  === 0)begin   //check w implementation         
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+    assert (wb_sel===2'b00)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", wb_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+    assert (w_en===1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", w_en);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+    assert (reg_sel===2'b01)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+ 
+assert (waiting  === 1)begin               //might not be correct timing
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   //AND ==========================================================================================================================
+ opcode = 3'b101; ALU_op = 2'b10;
+   #5;
+start =1'b1;
+#10;
+start = 1'b0;
+
+assert (waiting  === 1)begin              
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+  #10;
+
+  assert (reg_sel  === 2'b00)begin               
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 0)begin            
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (waiting  === 0)begin           
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert (reg_sel  === 2'b10)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 0)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   assert ({sel_A,sel_B}  === {0,0})begin          
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: values are %-d %d (expected 1)", sel_A, sel_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_C  === 1)begin            
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_C);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_status  === 0)begin   //check w implementation         
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+    assert (wb_sel===2'b00)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", wb_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+    assert (w_en===1)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", w_en);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+    assert (reg_sel===2'b01)begin
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+ 
+assert (waiting  === 1)begin               //might not be correct timing
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   //CMP ====================================================================
+   opcode = 3'b101; ALU_op = 2'b01;
+   #5;
+start =1'b1;
+#10;
+start = 1'b0;
+
+//Load B
+
+assert (waiting  === 1)begin              
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+  #10;
+
+  assert (reg_sel  === 2'b00)begin               
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 0)begin            
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (waiting  === 0)begin           
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;// Load A
+
+   assert (reg_sel  === 2'b10)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", reg_sel);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_A  === 1)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_A);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_B  === 0)begin             
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10; // operation
+
+   assert ({sel_A,sel_B}  === {0,0})begin          
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: values are %-d %d (expected 1)", sel_A, sel_B);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   assert (en_status  === 1)begin   //check w implementation         
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_status);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+assert (waiting  === 1)begin              
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", waiting);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+
+   #10;
+
+   
+//done 
+
+
+   assert (en_status  === 0)begin        
+    $display("[PASS]: value is true");
+    num_passes = num_passes+1;
+    end else begin
+        $error("[FAIL]: value is %-d (expected 1)", en_status);
+        outErr = 1'b1;
+        num_fails = num_fails+1;
+   end
+   #10;
+
+
+
+  $display("\n\n==== TEST SUMMARY ====");
+    $display("  TEST COUNT: %-5d", num_passes + num_fails);
+    $display("    - PASSED: %-5d", num_passes);
+    $display("    - FAILED: %-5d", num_fails);
+    $display("======================\n\n");
+    $stop;
+    
+
+  end
+
+  assign err = outErr;
+
+
+endmodule: tb_controller
