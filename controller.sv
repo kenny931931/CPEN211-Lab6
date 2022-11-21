@@ -16,6 +16,8 @@ module controller(input clk, input rst_n, input start,
 //move immediate states
 `define movI_one 4'd3
 
+`define finish 4'd4;
+
 
 //MOV states
 `define mov1 4'd5
@@ -64,7 +66,8 @@ always_ff @( posedge clk ) begin
               case (state)
                 `wait : {next, reg_sel, en_B,waiting} <= {`mov1,2'b00,1'b1,1'b0};
                 `mov1 : {next,sel_B,sel_A,en_C} <= {`mov2,1'b0,1'b1,1'b1};
-                `mov2 : {next, wb_sel,w_en,reg_sel,waiting, signal, en_C,en_B} <= {`wait,2'b00,1'b1,2'b01,1'b1,1'b0,1'b0,1'b0};
+                `mov2 : {next, wb_sel,w_en,reg_sel, en_C,en_B} <= {`finish,2'b00,1'b1,2'b01,1'b0,1'b0};
+                `finish : {next, waiting, signal, en_C, w_en} <= {`wait, 1'b1,1'b0, 1'b0,1'b0};
               endcase
 
             end
@@ -74,8 +77,8 @@ always_ff @( posedge clk ) begin
             `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
             `loadB : {next,reg_sel,en_A,en_B} <= {`loadA, 2'b10, 1'b1,1'b0};
             `loadA : {next, sel_A,sel_B,en_C} <= {`cal, 1'b0,1'b0,1'b1};
-            `cal : {next, wb_sel,w_en,reg_sel,waiting,signal,en_A,en_C,en_B} <= {`wait, 2'b00, 1'b1,2'b01,1'b1,1'b0,1'b0,1'b0,1'b0};
-          
+            `cal : {next, wb_sel,w_en,reg_sel,en_A,en_C,en_B} <= {`finish, 2'b00, 1'b1,2'b01,1'b1,1'b0,1'b0,1'b0,1'b0};
+            `finish : {next, waiting, signal, w_en} <= {`wait, 1'b1,1'b0, 1'b0};
             endcase
 
               
@@ -85,8 +88,8 @@ always_ff @( posedge clk ) begin
               case (state)
             `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
             `loadB : {next,reg_sel,en_A,en_B} <= {`loadA, 2'b10, 1'b1,1'b0};
-            `loadA : {next, sel_A,sel_B, en_status, waiting} <= {`enable, 1'b0,1'b0,1'b1,1'b1}; //status should output on the next rising edge, waiting goes high early
-            `enable : {next, en_status, signal,en_A,en_C,en_B} <= {`wait, 1'b0, 1'b0,1'b0,1'b0,1'b0};
+            `loadA : {next, sel_A,sel_B, en_status} <= {`enable, 1'b0,1'b0,1'b1}; //status should output on the next rising edge, waiting goes high early
+            `enable : {next, en_status, signal,en_A,en_C,en_B,waiting} <= {`wait, 1'b0, 1'b0,1'b0,1'b0,1'b0,1'b1};
 
 
               endcase
@@ -97,7 +100,8 @@ always_ff @( posedge clk ) begin
               case (state)
               `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
               `loadB : {next, sel_A,sel_B,en_C} <= {`cal, 1'b0,1'b0,1'b1};
-              `cal : {next, wb_sel,w_en,reg_sel, waiting, signal,en_A,en_C,en_B} <= {`wait, 2'b00, 1'b1,2'b01,1'b1,1'b0,1'b0,1'b0,1'b0};
+              `cal : {next, wb_sel,w_en,reg_sel} <= {`finish, 2'b00, 1'b1,2'b01};
+              `finish : {next, waiting, signal, w_en,en_A,en_C,en_B} <= {`wait, 1'b1,1'b0,1'b0,1'b0,1'b0,1'b0};
               endcase
             end
 
