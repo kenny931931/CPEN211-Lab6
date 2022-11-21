@@ -3,9 +3,9 @@ module cpu(input clk, input rst_n, input load, input start, input [15:0] instr,
   // your implementation here
   reg [15:0] f_instr;
   wire [15:0] sximm5, sximm8, d_out;
-  wire [2:0] opcode, reg_sel, wb_sel, r_addr, w_addr;
-  wire [1:0] op, shift_op; //op = ALU_op OR op
-  wire z, n, v, w, w_en, en_a, en_b, en_c, en_status, sel_A, sel_B;
+  wire [2:0] opcode, r_addr, w_addr;
+  wire [1:0] reg_sel, wb_sel, op, shift_op; //op = ALU_op OR op
+  wire z, n, v, w, w_en, en_A, en_B, en_C, en_status, sel_A, sel_B;
   
   assign out = d_out;
   assign Z = z;
@@ -25,11 +25,11 @@ module cpu(input clk, input rst_n, input load, input start, input [15:0] instr,
 		z, n, v,
 		w,
 		reg_sel, wb_sel, w_en,
-		en_a, en_b, en_c, en_status,
+		en_A, en_B, en_C, en_status,
 		sel_A, sel_B);
 		
   // Modified datapath
-  datapath d(clk, 16'b0, 16'b0, wb_sel,
+  datapath d(clk, 16'b0, 8'b0, wb_sel,
         w_addr, w_en, r_addr, en_A,
 		en_B, shift_op, sel_A, sel_B,
 		op, en_C, en_status,
