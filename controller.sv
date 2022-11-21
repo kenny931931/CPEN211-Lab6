@@ -16,7 +16,7 @@ module controller(input clk, input rst_n, input start,
 //move immediate states
 `define movI_one 4'd3
 
-`define finish 4'd4;
+`define finish 4'd4
 
 
 //MOV states
