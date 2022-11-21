@@ -1,0 +1,9 @@
+Partner 1:
+  Task 1: generate datapath.vo
+  Task 2: idecoder.sv, idecoder.vo, tb_idecoder.sv
+  Task 3: controller.sv, controller.vo, tb_controller.sv
+  Task 4: generate cpu.vo
+
+Partner 2:
+  Task 1: datapath.sv, tb_datapath.sv, alu.sv, shifter.sv, regfile.sv
+  Task 4: cpu.sv, tb_cpu.sv
