@@ -96,7 +96,7 @@ always_ff @( posedge clk ) begin
 
             end
 //MVN           
-            5'b10100 : begin
+            5'b10111 : begin
               case (state)
               `wait : {next,reg_sel,en_A,en_B,waiting} <= {`loadB, 2'b00,1'b0,1'b1,1'b0};
               `loadB : {next, sel_A,sel_B,en_C} <= {`cal, 1'b0,1'b0,1'b1};
