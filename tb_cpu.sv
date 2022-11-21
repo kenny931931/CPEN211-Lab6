@@ -2,9 +2,10 @@ module tb_cpu(output err);
   // your implementation here
   
   reg clk, rst_n, load, start, waiting, N, V, Z;
-  reg [15:0] instr, out;
+  reg [15:0] instr;
+  reg signed [15:0] out;
   
-  reg outErr;
+  reg outErr = 0;
   
   integer num_passes = 0;
   integer num_fails = 0;
@@ -64,30 +65,32 @@ module tb_cpu(output err);
   
   task test(input [15:0] in, input signed [15:0] exp);
     run(in);#50; // 5 clock cycle for running any instruction
-	assert(out == exp && waiting == 1'b0) begin
-	  $display("[PASS]: val is $-d", exp);
+	assert(out == exp && waiting == 1'b1) begin
+	  $display("[PASS]: val is %-d", exp);
 	  num_passes = num_passes + 1;
 	end else begin
-	  $error("[FAIL] val is $-d (expected $-d), and waiting is $-b (expected $-b)", out, exp, waiting, 1'b0);
+	  $error("[FAIL] val is %-d (expected %-d), and waiting is %-b (expected %-b)", out, exp, waiting, 1'b1);
 	  outErr = 1'b1;
 	  num_fails = num_fails+1;
 	end
+	#10;
   endtask
   
-  task testCMP(input [15:0] in, input signed [15:0] exp, input [2:0] exp_f);
+  task testCMP(input [15:0] in, input [2:0] exp_f);
     run(in);#50; // 5 clock cycle for running any instruction
-	assert(out == exp && {Z,N,V} == exp_f && waiting == 1'b0) begin
-	  $display("[PASS]: val is $-d and flag[ZNV] is  $-b", exp, exp_f);
+	assert({Z,N,V} == exp_f && waiting == 1'b1) begin
+	  $display("[PASS]: flag[ZNV] is  %-b, and waiting is %-b", exp_f, waiting);
 	  num_passes = num_passes + 1;
 	end else begin
-	  $error("[FAIL] val is $-d (expected $-d), flag[ZNV] is $-b (expected $-b), and waiting is $-b (expected $-b)", out, exp, {Z,N,V}, exp_f, waiting, 1'b0);
+	  $error("[FAIL] flag[ZNV] is %-b (expected %-b), and waiting is %-b (expected %-b)", {Z,N,V}, exp_f, waiting, 1'b1);
 	  outErr = 1'b1;
 	  num_fails = num_fails+1;
 	end
+	#10;
   endtask
   
   initial begin
-    clk = 1'b1;
+    clk = 1'b0;
     forever #5 clk = ~clk;
   end
   
@@ -99,7 +102,7 @@ module tb_cpu(output err);
 	$display("\n(MOV immediate val)");
 	begin
 	  init();
-	  test({`MOVr, 3'b000, `reg1, 2'b00, `reg1}, 16'd4);
+	  test({`MOVr, 3'b000, `reg1, 2'b00, `reg1}, 16'd0);
 	  test({`MOVr, 3'b000, `reg5, 2'b00, `reg5}, 16'd4);
 	  test({`MOVr, 3'b000, `reg7, 2'b00, `reg7}, 16'd6);
 	end
@@ -122,7 +125,7 @@ module tb_cpu(output err);
 	  test({`MOVr, 3'b000, `reg6, 2'b00, `reg6}, 16'd2);
 	  
 	  // MOVr (arithmetic right shift) (-3 = -2 -> reg8)
-	  run({`MOV, `reg7, -8'd3});
+	  run({`MOV, `reg7, -8'd3});#10;
 	  test({`MOVr, 3'b000, `reg8, 2'b11, `reg7}, -16'd2);
 	  test({`MOVr, 3'b000, `reg8, 2'b00, `reg8}, -16'd2);
 	end
@@ -147,13 +150,13 @@ module tb_cpu(output err);
 	  init();
 	  
 	  // AND (LSR) (-2 & 1 = 0 -> reg3)
-	  run({`MOV, `reg1, -8'd2});
-	  test({`AND, `reg1, `reg3, 2'b01, `reg4}, 16'd0);
+	  run({`MOV, `reg1, -8'd2});#10;
+	  test({`AND, `reg1, `reg3, 2'b10, `reg4}, 16'd0);
 	  test({`MOVr, 3'b000, `reg3, 2'b00, `reg3}, 16'd0);
 	  
 	  // AND (no shift) (255 AND 69 = 69 -> reg6)
-	  run({`MOV, `reg4, -8'd1});
-	  run({`MOV, `reg5, 8'd69});
+	  run({`MOV, `reg4, -8'd1});#10;
+	  run({`MOV, `reg5, 8'd69});#10;
 	  test({`AND, `reg4, `reg6, 2'b00, `reg5}, 16'd69);
 	  test({`MOVr, 3'b000, `reg6, 2'b00, `reg6}, 16'd69);
 	end
@@ -168,7 +171,7 @@ module tb_cpu(output err);
 	  test({`MOVr, 3'b000, `reg1, 2'b00, `reg1}, -16'd4);
 	  
 	  // MVN (LSR) (93 = -47 -> reg2)
-	  run({`MOV, `reg2, 8'd93});
+	  run({`MOV, `reg2, 8'd93});#10;
 	  test({`MVN, 3'b000, `reg2, 2'b10, `reg2}, -16'd47);
 	  test({`MOVr, 3'b000, `reg2, 2'b00, `reg2}, -16'd47);
 	  
@@ -180,23 +183,33 @@ module tb_cpu(output err);
 	  init();
 	  
 	  // CMP (no shift) (3 - 1 = 2) status = 000
-	  testCMP({`CMP, `reg4, 3'b000, 2'b00, `reg2}, 16'd2, 3'b000);
+	  testCMP({`CMP, `reg4, 3'b000, 2'b00, `reg2}, 3'b000);
 	  
 	  // CMP (no shift) (1 - 3 = -2) status = 010
-	  testCMP({`CMP, `reg2, 3'b000, 2'b00, `reg4}, -16'd2, 3'b010);
+	  testCMP({`CMP, `reg2, 3'b000, 2'b00, `reg4}, 3'b010);
 	  
 	  // CMP (LSR) (2 - 4 = 0) status = 100
-	  testCMP({`CMP, `reg3, 3'b000, 2'b10, `reg5}, 16'd0, 3'b100);
+	  testCMP({`CMP, `reg3, 3'b000, 2'b10, `reg5}, 3'b100);
 	  
 	  // CMP (overflow)
 	  // -19 -> 32758 -> reg1 (MOVr & LSR)
 	  // -178 -> reg2
 	  // 32758 - (-178) = 32936 (overflow -> -32600)
-	  run({`MOV, `reg1, -8'd19});
-	  run({`MOVr, 3'b000, `reg1, 2'b10, `reg1});
-	  run({`MOV, `reg2, -8'd178});
-	  testCMP({`CMP, `reg1, 3'b000, 2'b00, `reg2}, -16'd32600, 3'b011);
+	  run({`MOV, `reg1, -8'd19});#10;
+	  run({`MOVr, 3'b000, `reg1, 2'b10, `reg1});#30;
+	  run({`MOV, `reg2, -8'd128});#10;
+	  testCMP({`CMP, `reg1, 3'b000, 2'b00, `reg2}, 3'b011);
 	end
+	
+	$display("\n\n==== TEST SUMMARY ====");
+    $display("  TEST COUNT: %-5d", num_passes + num_fails);
+    $display("    - PASSED: %-5d", num_passes);
+    $display("    - FAILED: %-5d", num_fails);
+    $display("======================\n\n");
+    $stop;
+	
   end
+  
+  assign err = outErr;
   
 endmodule: tb_cpu
