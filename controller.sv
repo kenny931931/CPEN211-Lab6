@@ -46,9 +46,19 @@ always_ff @( posedge clk ) begin
     instruction <= {opcode,ALU_op};
   end 
   if(signal ==1) begin 
-		if (~rst_n) begin
+		if (~rst_n) begin //reset signals if reset is hit
 			next <= `wait;
       waiting <= 1'b1;
+      w_en = 1'b0;
+      wb_sel = 2'b00;
+      en_A = 1'b0;
+      en_B = 1'b0;
+      sel_A = 1'b0;
+      sel_B = 1'b0;
+      en_status = 1'b0;
+      en_C = 1'b0;
+
+
 		end else begin
 			casex (instruction)
 //move immediate
